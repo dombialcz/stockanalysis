@@ -49,15 +49,18 @@ export default async function handler(req, res) {
 
         if (response.ok) {
           const csvData = await response.text();
+          console.log(`Full response from ${url}:`, csvData);
+          console.log(`Response length: ${csvData.length} chars`);
+          console.log(`First 200 chars:`, csvData.substring(0, 200));
           
-          // Validate CSV data
-          if (csvData && csvData.length > 0 && !csvData.includes('error') && !csvData.includes('404')) {
+          // More lenient validation - accept any non-empty response that's not HTML
+          if (csvData && csvData.trim().length > 0 && !csvData.toLowerCase().includes('<html') && !csvData.includes('error') && !csvData.includes('404')) {
             console.log(`Success with URL: ${url}, data length: ${csvData.length}`);
             res.setHeader('Content-Type', 'text/csv');
             res.setHeader('Cache-Control', 'public, max-age=300'); // Cache for 5 minutes
             return res.status(200).send(csvData);
           } else {
-            console.log(`Invalid data from ${url}: ${csvData.substring(0, 100)}`);
+            console.log(`Invalid data from ${url}: empty, HTML, or error response`);
             lastError = new Error(`Invalid data received from ${url}`);
           }
         } else {
