@@ -17,30 +17,72 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Symbol parameter is required' });
     }
 
-    // Fetch data from Stooq API
-    const stooqUrl = `https://stooq.com/q/d/l/?s=${s}&i=${i}`;
-    
-    const response = await fetch(stooqUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/csv,application/csv',
-      },
-    });
+    console.log(`Fetching data for symbol: ${s}`);
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    // Multiple fallback URLs for better reliability
+    const fallbackUrls = [
+      `https://stooq.com/q/d/l/?s=${s}&i=${i}`,
+      `https://stooq.pl/q/d/l/?s=${s}&i=${i}`,
+    ];
+
+    let lastError = null;
+
+    // Try each URL with timeout
+    for (const url of fallbackUrls) {
+      try {
+        console.log(`Trying URL: ${url}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/csv,text/plain,*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Cache-Control': 'no-cache',
+          },
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const csvData = await response.text();
+          
+          // Validate CSV data
+          if (csvData && csvData.length > 0 && !csvData.includes('error') && !csvData.includes('404')) {
+            console.log(`Success with URL: ${url}, data length: ${csvData.length}`);
+            res.setHeader('Content-Type', 'text/csv');
+            res.setHeader('Cache-Control', 'public, max-age=300'); // Cache for 5 minutes
+            return res.status(200).send(csvData);
+          } else {
+            console.log(`Invalid data from ${url}: ${csvData.substring(0, 100)}`);
+            lastError = new Error(`Invalid data received from ${url}`);
+          }
+        } else {
+          console.log(`HTTP error from ${url}: ${response.status}`);
+          lastError = new Error(`HTTP ${response.status} from ${url}`);
+        }
+      } catch (error) {
+        console.log(`Error with ${url}:`, error.message);
+        lastError = error;
+        continue;
+      }
     }
 
-    const csvData = await response.text();
-    
-    // Set CSV content type
-    res.setHeader('Content-Type', 'text/csv');
-    res.status(200).send(csvData);
+    // If all URLs failed, return error
+    console.error('All URLs failed, last error:', lastError);
+    res.status(503).json({ 
+      error: 'Failed to fetch stock data from all sources',
+      details: lastError?.message || 'Unknown error',
+      symbol: s
+    });
     
   } catch (error) {
     console.error('API Error:', error);
     res.status(500).json({ 
-      error: 'Failed to fetch stock data',
+      error: 'Internal server error',
       details: error.message 
     });
   }

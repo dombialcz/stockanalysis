@@ -55,7 +55,65 @@ function App() {
       console.log('Response status:', response.status);
       console.log('Response ok:', response.ok);
       
+      // If Vercel API fails (like 504 timeout), try AllOrigins as fallback
       if (!response.ok) {
+        console.log('Vercel API failed, trying AllOrigins fallback...');
+        
+        const fallbackUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://stooq.com/q/d/l/?s=${apiSymbol}&i=d`)}`;
+        const fallbackResponse = await fetch(fallbackUrl);
+        
+        if (fallbackResponse.ok) {
+          const data = await fallbackResponse.json();
+          if (data.contents && data.contents.length > 0 && !data.contents.includes('error')) {
+            console.log('AllOrigins fallback successful');
+            const parsedData = parseStooqData(data.contents);
+            
+            if (parsedData.length > 0) {
+              setStockData(parsedData);
+              // Continue with normal processing
+              const calculatedIndicators = [];
+              // Process normally from here
+              const detailStartIndex = Math.max(0, parsedData.length - 100);
+              
+              for (let i = 0; i < parsedData.length; i++) {
+                if (i < detailStartIndex && i < parsedData.length - 1) {
+                  calculatedIndicators.push({
+                    sma20: 0, sma50: 0, ema12: 0, ema26: 0, rsi: 50,
+                    macd: 0, macdSignal: 0, macdHistogram: 0,
+                    bollinger: { upper: 0, middle: 0, lower: 0 }
+                  });
+                } else {
+                  const dataSlice = parsedData.slice(0, i + 1);
+                  const sliceCloses = dataSlice.map(d => d.close);
+                  
+                  const sma20 = calculateSMA(sliceCloses, 20);
+                  const sma50 = calculateSMA(sliceCloses, 50);
+                  const ema12 = calculateEMA(sliceCloses, 12);
+                  const ema26 = calculateEMA(sliceCloses, 26);
+                  const rsi = calculateRSI(sliceCloses);
+                  const macdData = calculateMACD(sliceCloses);
+                  const bollinger = calculateBollingerBands(sliceCloses);
+                  
+                  calculatedIndicators.push({
+                    sma20, sma50, ema12, ema26, rsi,
+                    macd: macdData.macd, macdSignal: macdData.signal,
+                    macdHistogram: macdData.histogram, bollinger
+                  });
+                }
+              }
+              
+              setIndicators(calculatedIndicators);
+              const supportRes = findSupportResistance(parsedData);
+              setSupportResistance(supportRes);
+              const currentIndicators = calculatedIndicators[calculatedIndicators.length - 1];
+              const tradingRec = generateTradingRecommendation(parsedData, currentIndicators, supportRes);
+              setRecommendation(tradingRec);
+              setLastUpdated(new Date());
+              return; // Exit successfully
+            }
+          }
+        }
+        
         const errorText = await response.text();
         console.log('Error response text:', errorText);
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
