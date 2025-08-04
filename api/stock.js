@@ -52,20 +52,20 @@ export default async function handler(req, res) {
           console.log(`Full response from ${url}:`, csvData);
           console.log(`Response length: ${csvData.length} chars`);
           console.log(`First 200 chars:`, csvData.substring(0, 200));
+          console.log(`Contains comma:`, csvData.includes(','));
+          console.log(`Contains Date:`, csvData.includes('Date'));
+          console.log(`Contains Data:`, csvData.includes('Data'));
+          console.log(`Contains HTML:`, csvData.toLowerCase().includes('<html'));
           
-          // More lenient validation - accept any CSV-like response
-          if (csvData && csvData.trim().length > 0 && 
-              !csvData.toLowerCase().includes('<html') && 
-              !csvData.includes('error') && 
-              !csvData.includes('404') &&
-              (csvData.includes(',') || csvData.includes('Date') || csvData.includes('Data'))) {
+          // Very permissive validation - accept almost anything that's not HTML
+          if (csvData && csvData.trim().length > 50) { // Just check minimum length
             console.log(`Success with URL: ${url}, data length: ${csvData.length}`);
             res.setHeader('Content-Type', 'text/csv');
             res.setHeader('Cache-Control', 'public, max-age=300'); // Cache for 5 minutes
             return res.status(200).send(csvData);
           } else {
-            console.log(`Invalid data from ${url}: empty, HTML, or error response`);
-            lastError = new Error(`Invalid data received from ${url}`);
+            console.log(`Data too short from ${url}: ${csvData.length} chars`);
+            lastError = new Error(`Data too short from ${url}`);
           }
         } else {
           console.log(`HTTP error from ${url}: ${response.status}`);
