@@ -19,7 +19,7 @@ export default async function handler(req, res) {
 
     console.log(`Fetching data for symbol: ${s}`);
 
-    // Multiple fallback URLs for better reliability
+    // Multiple fallback URLs for better reliability - prioritize .com (English headers)
     const fallbackUrls = [
       `https://stooq.com/q/d/l/?s=${s}&i=${i}`,
       `https://stooq.pl/q/d/l/?s=${s}&i=${i}`,
@@ -53,8 +53,12 @@ export default async function handler(req, res) {
           console.log(`Response length: ${csvData.length} chars`);
           console.log(`First 200 chars:`, csvData.substring(0, 200));
           
-          // More lenient validation - accept any non-empty response that's not HTML
-          if (csvData && csvData.trim().length > 0 && !csvData.toLowerCase().includes('<html') && !csvData.includes('error') && !csvData.includes('404')) {
+          // More lenient validation - accept any CSV-like response
+          if (csvData && csvData.trim().length > 0 && 
+              !csvData.toLowerCase().includes('<html') && 
+              !csvData.includes('error') && 
+              !csvData.includes('404') &&
+              (csvData.includes(',') || csvData.includes('Date') || csvData.includes('Data'))) {
             console.log(`Success with URL: ${url}, data length: ${csvData.length}`);
             res.setHeader('Content-Type', 'text/csv');
             res.setHeader('Cache-Control', 'public, max-age=300'); // Cache for 5 minutes
