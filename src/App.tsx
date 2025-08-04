@@ -41,7 +41,8 @@ function App() {
       console.log('Fetching data for symbol:', stockSymbol);
       const apiSymbol = stockSymbol === 'ndq' ? '^ndq' : stockSymbol;
       console.log('API symbol:', apiSymbol);
-      const url = `/api/q/d/l/?s=${apiSymbol}&i=d`;
+      // Use Vercel API route
+      const url = `/api/stock?s=${apiSymbol}&i=d`;
       console.log('Fetching from URL:', url);
       
       const response = await fetch(url, {
